@@ -138,6 +138,7 @@ def create_prompt(file: PatchedFile, hunk: Hunk, pr_details: PRDetails) -> str:
     - Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
     - Use GitHub Markdown in comments
     - Focus on bugs, security issues, and performance problems
+    - Please answer "Korean".
     - IMPORTANT: NEVER suggest adding comments to the code
 
 Review the following code diff in the file "{file.path}" and take the pull request title and description into account when writing the response.
@@ -245,6 +246,7 @@ def create_review_comment(
     repo: str,
     pull_number: int,
     comments: List[Dict[str, Any]],
+    batch_size: int = 10,
 ):
     """Submits the review comments to the GitHub API."""
     print(f"Attempting to create {len(comments)} review comments")
@@ -252,14 +254,19 @@ def create_review_comment(
 
     repo = gh.get_repo(f"{owner}/{repo}")
     pr = repo.get_pull(pull_number)
+    total_batches = (len(comments) + batch_size - 1) 
     try:
         # Create the review with only the required fields
-        review = pr.create_review(
-            body="Gemini AI Code Reviewer Comments",
-            comments=comments,
-            event="COMMENT"
-        )
-        print(f"Review created successfully with ID: {review.id}")
+        for i in range(total_batches):
+            start = i * batch_size
+            batch = comments[start: start + batch_size]
+            body_msg = f"Gemini AI Code Reviewer Comments ({i+1}/{total_batches})"
+            review = pr.create_review(
+                body=body_msg,
+                comments=batch,
+                event="COMMENT"
+            )
+            print(f"Review created successfully with ID: {review.id}")
 
     except Exception as e:
         print(f"Error creating review: {str(e)}")
