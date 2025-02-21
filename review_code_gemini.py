@@ -281,7 +281,10 @@ def create_review_comment_batch(owner: str, repo: str, pull_number: int, batch: 
     # Compose a body message containing all batch comments
     body_lines = [f"Gemini AI Code Reviewer Comments Batch {batch_index+1}/{total_batches}:"]
     for comment in batch:
-        body_lines.append(f"- **File:** `{comment['path']}` **Line:** {comment['position']} \n  {comment['body']}")
+        body_lines.append(f"**File:** `{comment['path']}`  |  **Line:** {comment['position']}")
+        body_lines.append("")
+        body_lines.append(f"> {comment['body']}")
+        body_lines.append("")  # 빈 줄로 구분
     body_msg = "\n".join(body_lines)
     
     review = pr.create_review(
