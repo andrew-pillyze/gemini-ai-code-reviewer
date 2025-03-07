@@ -262,10 +262,36 @@ def get_file_content(owner: str, repo: str, file_path: str, ref: str = "main") -
 def get_full_line_number(file_lines: List[str], hunk: Hunk, diff_line_number: int) -> int:
     """
     Converts a diff-based line number to a full-file line number.
+    
+    - `diff_line_number`: diff 내부에서 AI가 반환한 상대적인 줄 번호
+    - `hunk.source_start`: 원본 파일에서 변경이 시작되는 줄 번호
+    - `hunk.lines`: 변경된 줄들을 포함하는 리스트
     """
-    source_start = hunk.source_start
-    source_lines = file_lines[:source_start + diff_line_number - 1]
-    return len(source_lines)
+    source_start = hunk.source_start  # 원본 파일에서 변경된 코드의 시작 줄
+    target_start = hunk.target_start  # 변경 후 파일에서 시작하는 줄
+
+    # 실제 파일의 줄 번호를 추적
+    absolute_line_number = source_start  
+    current_diff_line = 0
+
+    for line in hunk.content.split("\n"):
+        # diff 내에서 특정 줄(`diff_line_number`)을 찾으면 반환
+        if current_diff_line == diff_line_number:
+            return absolute_line_number
+        
+        # 삭제된 줄 (-)인 경우, 실제 파일 줄 번호는 증가하지 않음
+        if line.startswith("-"):
+            continue
+
+        # 추가된 줄(+)이 아닌 경우에만 원본 파일의 줄 번호 증가
+        if not line.startswith("+"):
+            absolute_line_number += 1
+
+        current_diff_line += 1  # diff 내부의 줄 번호 증가
+
+    print(f"Warning: Couldn't find exact match for diff_line_number {diff_line_number}")
+    return absolute_line_number  # 기본적으로 변환된 줄 번호 반환
+
 # def create_review_comment(
 #     owner: str,
 #     repo: str,
