@@ -134,12 +134,14 @@ def analyze_code(parsed_diff: List[Dict[str, Any]], pr_details: PRDetails) -> Li
 def create_prompt(file: PatchedFile, hunk: Hunk, pr_details: PRDetails) -> str:
     """Creates the prompt for the Gemini model."""
     return f"""Your task is reviewing pull requests. Instructions:
-    - Provide the response in following JSON format:  {{"reviews": [{{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}}]}}
-    - Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
-    - Use GitHub Markdown in comments
-    - Focus on bugs, security issues, and performance problems
-    - Please answer "Korean".
-    - IMPORTANT: NEVER suggest adding comments to the code
+    - Provide the response in the following JSON format:  
+    { "reviews": [ { "lineNumber": <line_number>, "reviewComment": "<review comment>" } ] }
+    - Only provide comments and suggestions if there is a **critical issue** (e.g., fatal bugs, security vulnerabilities, severe performance problems).
+    - Ignore minor issues such as code style, formatting, or best practices.
+    - NEVER suggest adding comments to the code.
+    - Use GitHub Markdown in comments.
+    - Return an **empty array** (`"reviews": []`) if there are no **highly critical** issues.
+    - Answer in **Korean**.
 
 Review the following code diff in the file "{file.path}" and take the pull request title and description into account when writing the response.
 
@@ -241,66 +243,66 @@ def create_comment(file: FileInfo, hunk: Hunk, ai_responses: List[Dict[str, str]
             print(f"Error creating comment from AI response: {e}, Response: {ai_response}")
     return comments
 
-# def create_review_comment(
-#     owner: str,
-#     repo: str,
-#     pull_number: int,
-#     comments: List[Dict[str, Any]],
-#     batch_size: int = 10,
-# ):
-#     """Submits the review comments to the GitHub API."""
-#     print(f"Attempting to create {len(comments)} review comments")
-#     print(f"Comments content: {json.dumps(comments, indent=2)}")
+def create_review_comment(
+    owner: str,
+    repo: str,
+    pull_number: int,
+    comments: List[Dict[str, Any]],
+    batch_size: int = 10,
+):
+    """Submits the review comments to the GitHub API."""
+    print(f"Attempting to create {len(comments)} review comments")
+    print(f"Comments content: {json.dumps(comments, indent=2)}")
 
-#     repo = gh.get_repo(f"{owner}/{repo}")
-#     pr = repo.get_pull(pull_number)
-#     total_batches = (len(comments) + batch_size - 1) 
-#     try:
-#         # Create the review with only the required fields
-#         for i in range(total_batches):
-#             start = i * batch_size
-#             batch = comments[start: start + batch_size]
-#             body_msg = f"Gemini AI Code Reviewer Comments ({i+1}/{total_batches})"
-#             review = pr.create_review(
-#                 body=body_msg,
-#                 comments=batch,
-#                 event="COMMENT"
-#             )
-#             print(f"Review created successfully with ID: {review.id}")
+    repo = gh.get_repo(f"{owner}/{repo}")
+    pr = repo.get_pull(pull_number)
+    total_batches = (len(comments) + batch_size - 1) 
+    try:
+        # Create the review with only the required fields
+        for i in range(total_batches):
+            start = i * batch_size
+            batch = comments[start: start + batch_size]
+            body_msg = f"Gemini AI Code Reviewer Comments ({i+1}/{total_batches})"
+            review = pr.create_review(
+                body=body_msg,
+                comments=batch,
+                event="COMMENT"
+            )
+            print(f"Review created successfully with ID: {review.id}")
 
-#     except Exception as e:
-#         print(f"Error creating review: {str(e)}")
-#         print(f"Error type: {type(e)}")
-#         print(f"Review payload: {comments}")
+    except Exception as e:
+        print(f"Error creating review: {str(e)}")
+        print(f"Error type: {type(e)}")
+        print(f"Review payload: {comments}")
 
-def create_review_comment_batch(owner: str, repo: str, pull_number: int, batch: List[Dict[str, Any]], batch_index: int, total_batches: int):
-    """Creates a review for a batch of comments, combining them into the review body."""
-    repo_obj = gh.get_repo(f"{owner}/{repo}")
-    pr = repo_obj.get_pull(pull_number)
+# def create_review_comment_batch(owner: str, repo: str, pull_number: int, batch: List[Dict[str, Any]], batch_index: int, total_batches: int):
+#     """Creates a review for a batch of comments, combining them into the review body."""
+#     repo_obj = gh.get_repo(f"{owner}/{repo}")
+#     pr = repo_obj.get_pull(pull_number)
     
-    # Compose a body message containing all batch comments
-    body_lines = [f"Gemini AI Code Reviewer Comments Batch {batch_index+1}/{total_batches}:"]
-    for comment in batch:
-        body_lines.append(f"**File:** `{comment['path']}`  |  **Line:** {comment['position']}")
-        body_lines.append("")
-        body_lines.append(f"> {comment['body']}")
-        body_lines.append("")  # 빈 줄로 구분
-    body_msg = "\n".join(body_lines)
+#     # Compose a body message containing all batch comments
+#     body_lines = [f"Gemini AI Code Reviewer Comments Batch {batch_index+1}/{total_batches}:"]
+#     for comment in batch:
+#         body_lines.append(f"**File:** `{comment['path']}`  |  **Line:** {comment['position']}")
+#         body_lines.append("")
+#         body_lines.append(f"> {comment['body']}")
+#         body_lines.append("")  # 빈 줄로 구분
+#     body_msg = "\n".join(body_lines)
     
-    review = pr.create_review(
-        body=body_msg,
-        event="COMMENT"
-    )
-    print(f"Created review batch {batch_index+1} with ID: {review.id}")
-    return review
+#     review = pr.create_review(
+#         body=body_msg,
+#         event="COMMENT"
+#     )
+#     print(f"Created review batch {batch_index+1} with ID: {review.id}")
+#     return review
 
-def create_review_comment(owner: str, repo: str, pull_number: int, comments: List[Dict[str, Any]], batch_size: int = 10):
-    """Submits review comments in batches, combining each batch into one review body."""
-    total_batches = (len(comments) + batch_size - 1) // batch_size
-    print(f"Total comments: {len(comments)}; creating {total_batches} review batches (batch size: {batch_size})")
-    for i in range(0, len(comments), batch_size):
-        batch = comments[i:i+batch_size]
-        create_review_comment_batch(owner, repo, pull_number, batch, i // batch_size, total_batches)
+# def create_review_comment(owner: str, repo: str, pull_number: int, comments: List[Dict[str, Any]], batch_size: int = 10):
+#     """Submits review comments in batches, combining each batch into one review body."""
+#     total_batches = (len(comments) + batch_size - 1) // batch_size
+#     print(f"Total comments: {len(comments)}; creating {total_batches} review batches (batch size: {batch_size})")
+#     for i in range(0, len(comments), batch_size):
+#         batch = comments[i:i+batch_size]
+#         create_review_comment_batch(owner, repo, pull_number, batch, i // batch_size, total_batches)
 
 
 def parse_diff(diff_str: str) -> List[Dict[str, Any]]:
